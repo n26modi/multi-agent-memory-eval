@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -16,13 +15,13 @@ class Finding:
 
 class Memory(ABC):
     @abstractmethod
-    def write(self, finding: Finding) -> None: ...
+    async def write(self, finding: Finding) -> None: ...
 
     @abstractmethod
-    def query(self, query_text: str, k: int = 5) -> list[Finding]: ...
+    async def query(self, query_text: str, k: int = 5) -> list[Finding]: ...
 
     @abstractmethod
-    def current_value(self, entity: str, relation: str) -> Optional[Finding]:
+    async def current_value(self, entity: str, relation: str) -> Finding | None:
         # ChromaMemory fakes this with a recency tiebreak.
         # GraphitiMemory answers it correctly via invalid_at filtering.
         # That asymmetry is what the experiment measures.

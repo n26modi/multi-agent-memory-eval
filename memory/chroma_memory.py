@@ -8,7 +8,7 @@ class ChromaMemory(Memory):
         self.col = self.client.get_or_create_collection(collection_name)
         self._counter = 0
 
-    def write(self, f: Finding) -> None:
+    async def write(self, f: Finding) -> None:
         self._counter += 1
         self.col.add(
             ids=[f"f{self._counter}"],
@@ -23,14 +23,14 @@ class ChromaMemory(Memory):
             }],
         )
 
-    def query(self, query_text: str, k: int = 5) -> list[Finding]:
+    async def query(self, query_text: str, k: int = 5) -> list[Finding]:
         res = self.col.query(query_texts=[query_text], n_results=k)
         return [
             self._to_finding(m, d)
             for m, d in zip(res["metadatas"][0], res["documents"][0])
         ]
 
-    def current_value(self, entity: str, relation: str) -> Finding | None:
+    async def current_value(self, entity: str, relation: str) -> Finding | None:
         hits = self._scan(entity, relation)
         if not hits:
             return None

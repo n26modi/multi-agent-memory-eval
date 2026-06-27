@@ -1,0 +1,9 @@
+langgraph
+chromadb
+graphiti-core
+fastapi
+uvicorn
+groq
+neo4j
+python-dotenv
+sentence-transformers
