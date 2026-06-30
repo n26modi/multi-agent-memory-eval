@@ -13,7 +13,7 @@ GROQ_MODEL = "llama-3.1-8b-instant"
 
 
 class GraphitiMemory(Memory):
-    def __init__(self, uri: str, user: str, password: str):
+    def __init__(self, uri: str, user: str, password: str, group_id: str = "default"):
         llm_client = GroqClient(
             config=LLMConfig(
                 api_key=os.environ["GROQ_API_KEY"],
@@ -27,6 +27,7 @@ class GraphitiMemory(Memory):
             llm_client=llm_client,
             embedder=LocalEmbedder(),
         )
+        self.group_id = group_id
 
     async def write(self, f: Finding) -> None:
         await self.g.add_episode(
@@ -34,16 +35,17 @@ class GraphitiMemory(Memory):
             episode_body=f.retrieved_text,
             source_description=f.source_id,
             reference_time=datetime.fromtimestamp(f.valid_at, tz=timezone.utc),
+            group_id=self.group_id,
         )
 
     async def query(self, query_text: str, k: int = 5) -> list[Finding]:
-        edges = await self.g.search(query_text, num_results=k)
+        edges = await self.g.search(query_text, num_results=k, group_ids=[self.group_id])
         return [self._edge_to_finding(e) for e in edges]
 
     async def current_value(self, entity: str, relation: str) -> Finding | None:
-        # Search semantically for this entity+relation pair, then keep only
-        # edges that are still live (invalid_at is None = not superseded).
-        edges = await self.g.search(f"{entity} {relation}", num_results=20)
+        edges = await self.g.search(
+            f"{entity} {relation}", num_results=20, group_ids=[self.group_id]
+        )
         live = [e for e in edges if e.invalid_at is None]
         if not live:
             return None
