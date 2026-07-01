@@ -1,4 +1,4 @@
-# Temporal Memory Architecture in Multi-Agent Systems: Flat RAG Fails for Loops
+# Temporal Memory Architecture in Multi-Agent Systems: Benchmarking RAG vs Temporal Graphs on Staleness
 
 Multi-agent research loops retrieve facts, reason over them, and synthesize answers. The memory layer is load-bearing - get it wrong and the entire loop degrades, regardless of how well the agents themselves are designed.
 
