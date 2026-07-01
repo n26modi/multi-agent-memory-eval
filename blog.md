@@ -41,7 +41,7 @@ Measuring the quality of memory in a multi-agent loop requires more than accurac
 
 **Static fact (n=10)** - one correct fact per query, no temporal element. Control group. Confirms the loop works before adding temporal complexity.
 
-**Staleness-sensitive (n=15)** - two versions of a fact seeded into memory before each query. V1 is the older value (wrong answer for the query), V2 is the newer value (correct answer). Examples: a company's CEO changed, a fund changed its lead investor, a framework changed its default optimizer. The query asks for the current value.
+**Staleness-sensitive (n=15)** - two versions of a fact seeded into memory before each query. V1 is the older value (wrong answer for the query), V2 is the newer value (correct answer). Examples: a company's CEO changed, a user's favourite movie changed, a framework changed its default optimizer. The query asks for the current value.
 
 **Historical belief (n=5)** - same two-version setup, but the query asks for the *past* state. The older fact is the correct answer. I included this subset specifically to stress-test Graphiti's temporal invalidation in the direction where it's expected to fail.
 
