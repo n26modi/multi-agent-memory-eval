@@ -1,10 +1,10 @@
 # Temporal Memory Architecture in Multi-Agent Systems: Benchmarking RAG vs Temporal Graphs on Staleness
 
-Multi-agent research loops retrieve facts, reason over them, and synthesize answers. The memory layer is load-bearing - get it wrong and the entire loop degrades, regardless of how well the agents themselves are designed.
+*As multi-agent loop engineering matures, memory architecture becomes the critical failure point for most teams.*
 
-The standard approach is flat vector RAG: embed documents, store them in a vector store, retrieve by cosine similarity. It works well for single-shot retrieval. It breaks for loops, specifically when two versions of the same fact coexist in memory. The retriever has no concept of time. It returns whatever scores highest on similarity - which could be the outdated fact.
+Imagine a user's favourite movie changes. Interstellar gets dethroned by Inception. Both facts, the old favourite and the new, sit in the vector store. An agent queries for the current favourite. Similarity retrieval returns Interstellar, the outdated one. The critic agent flags it and triggers a retry. Same result. Retries again. Then escalates to a human, no answer produced.
 
-This is the **staleness problem in agentic memory management**. It's not theoretical. It manifests as a specific, observable failure mode in multi-agent loops: the critic detects staleness, the loop retries, the researcher retrieves the same stale fact again, the loop escalates. The agent loop becomes a trap.
+That failure is the staleness problem in flat vector RAG. Embed documents, store in a vector store, retrieve by cosine similarity and it works for single-shot retrieval. Inside a loop, when two versions of the same fact coexist in memory, it breaks. The retriever has no concept of time and returns whatever scores highest on similarity, which is often the outdated fact.
 
 An empirical A/B test of two memory architectures running the same 4-agent loop: ChromaDB (flat vector RAG, baseline) and Graphiti + Neo4j (temporal knowledge graph, treatment). Both back the same loop, with the same agents. Only the injected memory object differs.
 
@@ -59,7 +59,7 @@ Queries are isolated: each gets a fresh memory instance and a unique partition I
 
 ## How each backend handles stale facts
 
-The mechanism of failure is specific and consistent. Understanding it requires understanding what the memory layer sees when two versions of a fact exist.
+The mechanism comes down to what each memory layer sees when two versions of a fact exist.
 
 ![Chroma vs Graphiti retrieval comparison](assets/temporal_invalidation.png)
 
@@ -108,7 +108,7 @@ The failure trace for a staleness-sensitive query under Chroma vs Graphiti makes
 
 Chroma executes 8 steps to produce no answer. Graphiti executes 5 steps to produce the correct answer. The difference is entirely at the researcher's retrieval step - which fact gets returned from memory. Everything else in the loop is identical.
 
-This is what makes the failure mode expensive in production. Staleness doesn't just produce wrong answers. It produces escalations - the loop burns its full retry budget, incurs the latency of all those LLM calls, and returns nothing. Average latency for staleness-sensitive queries in Chroma was 11,937ms. In Graphiti, 9,243ms - and most of that difference is the queries that escalated running three researcher-critic cycles.
+The failure mode is expensive in production. Staleness doesn't just produce wrong answers. It produces escalations where the loop burns its full retry budget, incurs the latency of all those LLM calls, and returns nothing. Average latency for staleness-sensitive queries in Chroma was 11,937ms. In Graphiti, 9,243ms, and most of that difference comes from the queries that escalated running three full researcher-critic cycles.
 
 ---
 
@@ -122,7 +122,7 @@ Graphiti erases V1 when V2 is written. The researcher retrieves V2, the critic a
 
 Chroma retrieves either V1 or V2 with roughly equal probability (both have similar similarity scores). 3 of 5 correct, essentially random.
 
-This is the result that makes the staleness finding credible. If Graphiti won across all 30 queries, the eval would suggest the dataset was too easy. The historical-belief failure shows a real tradeoff: temporal invalidation that is good for "what is current?" is bad for "what was true before?" The right memory architecture depends on the question distribution the system needs to answer.
+A one-sided Graphiti win across all 30 queries would suggest the dataset was too easy. The historical-belief failure reveals a real tradeoff: temporal invalidation that works for "what is current?" actively works against "what was true before?" The right memory architecture depends on the question distribution the system needs to answer.
 
 ---
 
