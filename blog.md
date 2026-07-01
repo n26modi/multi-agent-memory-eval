@@ -6,7 +6,7 @@ Imagine a user's favourite movie changes. Interstellar gets dethroned by Batman 
 
 That failure is the staleness problem in flat vector RAG. Embed documents, store in a vector store, retrieve by cosine similarity. This works for single-shot retrieval. Inside a loop, when two versions of the same fact coexist in memory, it breaks. The retriever has no concept of time and returns whatever scores highest on similarity, which is often the outdated fact.
 
-I ran an A/B test of two memory architectures against the same 4-agent loop: ChromaDB (flat vector RAG, baseline) and Graphiti + Neo4j (temporal knowledge graph, treatment). Both back the same loop, with the same agents. Only the injected memory object differs.
+I ran an A/B test of two memory architectures against the same 4-agent loop: ChromaDB (flat vector RAG, baseline) and Graphiti + Neo4j (temporal knowledge graph, treatment). Both are backends to the exact same loop, with the exact same agents. Only the injected memory object differs.
 
 ---
 
@@ -29,13 +29,13 @@ class Memory(ABC):
     async def current_value(self, entity: str, relation: str) -> Finding | None: ...
 ```
 
-Two implementations, same interface. The loop never knows which backend it's talking to. That's the experimental seam.
+Both implementations call the same Memory class, so the loop never knows which backend it's talking to. This makes it a controlled experiment.
 
 ---
 
 ## The eval harness
 
-Measuring memory quality in a multi-agent loop requires more than accuracy on a benchmark. I built an eval harness that tracks not just whether the answer is correct, but *why* it's wrong, specifically whether staleness caused the failure.
+Measuring the quality of memory in a multi-agent loop requires more than accuracy on a benchmark. On top of just checking if the answer is correct, i built an eval harness that also tracks *why* an answer is wrong. Specifically, whether or not staleness is what caused the failure. 
 
 **Dataset: 30 queries across three types.**
 
