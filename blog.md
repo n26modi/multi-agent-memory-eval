@@ -6,7 +6,7 @@ The standard approach is flat vector RAG: embed documents, store them in a vecto
 
 This is the **staleness problem in agentic memory management**. It's not theoretical. It manifests as a specific, observable failure mode in multi-agent loops: the critic detects staleness, the loop retries, the researcher retrieves the same stale fact again, the loop escalates. The agent loop becomes a trap.
 
-This post documents an empirical A/B test of two memory architectures running the same 4-agent loop: ChromaDB (flat vector RAG, baseline) and Graphiti + Neo4j (temporal knowledge graph, treatment). Both back the same loop, with the same agents. Only the injected memory object differs.
+An empirical A/B test of two memory architectures running the same 4-agent loop: ChromaDB (flat vector RAG, baseline) and Graphiti + Neo4j (temporal knowledge graph, treatment). Both back the same loop, with the same agents. Only the injected memory object differs.
 
 ---
 
@@ -57,7 +57,7 @@ Queries are isolated: each gets a fresh memory instance and a unique partition I
 
 ---
 
-## Why flat RAG fails for loops
+## How each backend handles stale facts
 
 The mechanism of failure is specific and consistent. Understanding it requires understanding what the memory layer sees when two versions of a fact exist.
 
@@ -100,7 +100,7 @@ The retrieval-layer difference is the entire story. The researcher doesn't need 
 
 ---
 
-## The staleness trap in detail
+## The failure trace
 
 The failure trace for a staleness-sensitive query under Chroma vs Graphiti makes the mechanism concrete.
 
