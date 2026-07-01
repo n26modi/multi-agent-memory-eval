@@ -6,7 +6,7 @@ Imagine a user's favourite movie changes. Interstellar gets dethroned by Batman 
 
 That failure is the staleness problem in flat vector RAG. Embed documents, store in a vector store, retrieve by cosine similarity. This works for single-shot retrieval. Inside a loop, when two versions of the same fact coexist in memory, it breaks. The retriever has no concept of time and returns whatever scores highest on similarity, which is often the outdated fact.
 
-An empirical A/B test of two memory architectures running the same 4-agent loop: ChromaDB (flat vector RAG, baseline) and Graphiti + Neo4j (temporal knowledge graph, treatment). Both back the same loop, with the same agents. Only the injected memory object differs.
+I ran an A/B test of two memory architectures against the same 4-agent loop: ChromaDB (flat vector RAG, baseline) and Graphiti + Neo4j (temporal knowledge graph, treatment). Both back the same loop, with the same agents. Only the injected memory object differs.
 
 ---
 
@@ -35,7 +35,7 @@ Two implementations, same interface. The loop never knows which backend it's tal
 
 ## The eval harness
 
-Measuring memory quality in a multi-agent loop requires more than accuracy on a benchmark. The eval harness tracks not just whether the answer is correct, but *why* it's wrong - specifically whether staleness caused the failure.
+Measuring memory quality in a multi-agent loop requires more than accuracy on a benchmark. I built an eval harness that tracks not just whether the answer is correct, but *why* it's wrong, specifically whether staleness caused the failure.
 
 **Dataset: 30 queries across three types.**
 
@@ -43,7 +43,7 @@ Measuring memory quality in a multi-agent loop requires more than accuracy on a 
 
 **Staleness-sensitive (n=15)** - two versions of a fact seeded into memory before each query. V1 is the older value (wrong answer for the query), V2 is the newer value (correct answer). Examples: a company's CEO changed, a fund changed its lead investor, a framework changed its default optimizer. The query asks for the current value.
 
-**Historical belief (n=5)** - same two-version setup, but the query asks for the *past* state. The older fact is the correct answer. Designed to stress-test Graphiti's temporal invalidation in the direction where it's expected to fail.
+**Historical belief (n=5)** - same two-version setup, but the query asks for the *past* state. The older fact is the correct answer. I included this subset specifically to stress-test Graphiti's temporal invalidation in the direction where it's expected to fail.
 
 The anti-cheat constraint governs all staleness items: V1 and V2 texts must be **indistinguishable without timestamps**. No recency words - "former," "previously," "outdated," "no longer" are all banned from corpus text. No explicit dates in the facts. Both V1 and V2 describe their fact as currently true. A reader encountering only one version would believe it. This ensures the temporal mechanism - not surface cues - is what determines retrieval outcome.
 
@@ -94,7 +94,7 @@ The retrieval-layer difference is the entire story. The researcher doesn't need 
 
 **Critic false-approve rate:** 0% for both. The critic never let a stale fact through to the final report. This matters because it means the Chroma failures were not false negatives in the critic - they were inescapable loops. The critic was doing its job. The retriever wasn't doing its job.
 
-**Graphiti's 3 failures (20%):** All three were `retrieval_misalignment` escalations - the critic's LLM grounding check scored valid findings below 0.5, triggering unnecessary retries until escalation. These are noise from the 8B model used for agent LLM calls, not staleness system failures. Graphiti had zero findings where V1 made it into the final report.
+**Graphiti's 3 failures (20%):** All three were `retrieval_misalignment` escalations where the critic's LLM grounding check scored valid findings below 0.5, triggering unnecessary retries until escalation. These are noise from the 8B model used for agent LLM calls, not staleness system failures. Graphiti had zero findings where V1 made it into the final report.
 
 **Historical belief:** Chroma 60%, Graphiti 0%. Discussed below.
 
@@ -134,15 +134,15 @@ Across both conditions, three failure modes appeared:
 
 **Temporal overwrite failure** (Graphiti, 5/5 historical-belief queries) - V1 is marked invalid when V2 is written. Historical queries that need V1 retrieve V2 instead and produce the wrong answer.
 
-**Retrieval misalignment** (Graphiti, 3/15 staleness queries; noise, not staleness) - the critic's LLM grounding check gives a false negative on a valid finding, triggering unnecessary retries until escalation. Not a memory architecture failure - a small-model failure.
+**Retrieval misalignment** (Graphiti, 3/15 staleness queries; noise, not staleness) - the critic's LLM grounding check gives a false negative on a valid finding, triggering unnecessary retries until escalation. Not a memory architecture failure. A small-model failure.
 
 ---
 
 ## Caveats
 
-**Sample size.** n=15 on the staleness subset is enough to observe a clear directional effect but not enough for strong statistical claims. The 67 percentage point gap is large, but treat the exact numbers as indicative.
+**Sample size.** n=15 on the staleness subset is enough to observe a clear directional effect but not enough for strong statistical claims. The 67 percentage point gap is large, but I'd treat the exact numbers as indicative rather than definitive.
 
-**Manual invalidation vs native Graphiti.** Graphiti's `add_episode` method uses an internal LLM call for entity extraction. That call requires ~18K tokens per episode - more than the token-per-minute limit on any Groq free-tier model. `add_episode` was replaced with direct node and edge construction via `add_nodes_and_edges_bulk`, managing `invalid_at` with a Cypher query on write. The temporal semantics are preserved. Graphiti's LLM-driven entity resolution (which merges references to the same entity across different surface forms) is not used. The dataset uses exact-match entity strings across V1 and V2, so this doesn't affect results here.
+**Manual invalidation vs native Graphiti.** Graphiti's `add_episode` method uses an internal LLM call for entity extraction. That call requires ~18K tokens per episode, which exceeds the token-per-minute limit on any Groq free-tier model. `add_episode` was replaced with direct node and edge construction via `add_nodes_and_edges_bulk`, managing `invalid_at` with a Cypher query on write. The temporal semantics are preserved. Graphiti's LLM-driven entity resolution (which merges references to the same entity across different surface forms) is not used. The dataset uses exact-match entity strings across V1 and V2, so this doesn't affect results here.
 
 **Agent LLM is 8B.** The planner, critic grounding check, and synthesiser all use `llama-3.1-8b-instant` via Groq free tier. The retrieval misalignment failures and some static-fact misses are 8B inconsistency. A stronger model would reduce noise.
 
@@ -160,9 +160,9 @@ Flat vector RAG is the correct choice when:
 Temporal graph memory earns its complexity when:
 - Facts change and the system needs to track what changed and when
 - Queries ask "what is current?" for entities that have multiple versions in memory
-- Loop-based architectures retry on failure - because flat RAG creates inescapable retry loops for stale facts
+- Loop-based architectures retry on failure (flat RAG creates inescapable retry loops for stale facts)
 
-The third point is the one that gets missed. Temporal memory is often framed as a "knowledge base" improvement. It's actually a **loop engineering** improvement. Without it, a well-designed critic that correctly detects staleness makes the system *worse* - it burns retries on a problem the retriever can never solve.
+The third point is the one that gets missed. Temporal memory is often framed as a "knowledge base" improvement. It's actually a **loop engineering** improvement. Without it, a well-designed critic that correctly detects staleness makes the system *worse*. It burns retries on a problem the retriever can never solve.
 
 Historical belief queries require a third option: a memory architecture that can query across time windows rather than always returning the live fact. Neither backend tested here handles this well. Graphiti overwrites. ChromaDB guesses randomly. The right answer is a retriever that can accept a temporal constraint as part of the query.
 
