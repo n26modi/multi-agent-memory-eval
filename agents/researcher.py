@@ -11,9 +11,9 @@ async def researcher_agent(state: ResearchState, memory: Memory) -> ResearchStat
     for subtask in state["subtasks"]:
         hits = await memory.query(subtask, k=3)
         if hits:
-            # use memory hits directly — preserves entity/relation/valid_at
-            # so the critic's staleness check works on the exact same fields
-            findings.extend(hits)
+            # top-1 hit only — one finding per subtask keeps quality metric
+            # meaningful and makes the Chroma vs Graphiti comparison clean
+            findings.append(hits[0])
         else:
             # fallback: LLM extraction when memory is empty (e.g. vertical slice test)
             finding = await _llm_extract(subtask)

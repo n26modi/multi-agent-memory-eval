@@ -86,11 +86,15 @@ def score(result: ResearchState, q: dict) -> dict:
     report = result["final_report"].lower()
     gt = q["ground_truth"].lower()
     v1 = (q.get("v1_value") or "").lower()
+    tags = result["failure_tags"]
 
     correct = gt in report
     used_stale = bool(v1) and v1 in report and not correct
-    # critic false-approve: stale fact reached the final report
+    # false-approve: stale fact reached the final report without being caught
     critic_false_approve = used_stale and result["final_report"] != "escalated"
+    # staleness caused failure: either false-approve OR escalated because critic
+    # kept catching V1 but the researcher couldn't surface V2
+    staleness_caused_failure = not correct and "staleness_failure" in tags
 
     return {
         "qid": q["id"],
@@ -98,9 +102,10 @@ def score(result: ResearchState, q: dict) -> dict:
         "correct": correct,
         "used_stale_fact": used_stale,
         "critic_false_approve": critic_false_approve,
+        "staleness_caused_failure": staleness_caused_failure,
         "retries": result["retry_count"],
         "exit": "escalated" if result["final_report"] == "escalated" else "approved",
-        "failure_tags": result["failure_tags"],
+        "failure_tags": tags,
     }
 
 
@@ -194,22 +199,38 @@ def print_report():
     backends = ["chroma", "graphiti"]
     data = {b: load_completed(b) for b in backends}
 
-    def metric(rows: dict, types: list[str], key: str):
+    def pct(rows: dict, types: list[str], key: str, derive_from: str | None = None):
         subset = [r for r in rows.values() if r["type"] in types]
         if not subset:
             return "n/a"
-        return f"{sum(r[key] for r in subset) / len(subset):.0%} ({len(subset)})"
+        if derive_from == "inverse_correct":
+            val = sum(not r["correct"] for r in subset) / len(subset)
+        elif key in subset[0]:
+            val = sum(r[key] for r in subset) / len(subset)
+        else:
+            # derive staleness_caused_failure from failure_tags for old saved results
+            val = sum(
+                not r["correct"] and "staleness_failure" in r.get("failure_tags", [])
+                for r in subset
+            ) / len(subset)
+        return f"{val:.0%} (n={len(subset)})"
+
+    ALL = ["static_fact", "staleness_sensitive", "historical_belief"]
+    SS  = ["staleness_sensitive"]
+    HB  = ["historical_belief"]
 
     print("\n=== EVAL RESULTS ===\n")
     headers = ["Metric", "ChromaDB", "Graphiti"]
     rows = [
-        ["Overall accuracy (30)", metric(data["chroma"], ["static_fact","staleness_sensitive","historical_belief"], "correct"), metric(data["graphiti"], ["static_fact","staleness_sensitive","historical_belief"], "correct")],
-        ["Staleness error rate (15)", metric(data["chroma"], ["staleness_sensitive"], "used_stale_fact"), metric(data["graphiti"], ["staleness_sensitive"], "used_stale_fact")],
-        ["Critic false-approve rate", metric(data["chroma"], ["staleness_sensitive"], "critic_false_approve"), metric(data["graphiti"], ["staleness_sensitive"], "critic_false_approve")],
-        ["Historical-belief accuracy (5)", metric(data["chroma"], ["historical_belief"], "correct"), metric(data["graphiti"], ["historical_belief"], "correct")],
+        ["Overall accuracy (30)",              pct(data["chroma"], ALL, "correct"),                      pct(data["graphiti"], ALL, "correct")],
+        ["Staleness accuracy (15)",             pct(data["chroma"], SS,  "correct"),                      pct(data["graphiti"], SS,  "correct")],
+        ["Staleness error rate (15)",           pct(data["chroma"], SS,  "correct", "inverse_correct"),   pct(data["graphiti"], SS,  "correct", "inverse_correct")],
+        ["Staleness-caused failures (15)",      pct(data["chroma"], SS,  "staleness_caused_failure"),     pct(data["graphiti"], SS,  "staleness_caused_failure")],
+        ["Critic false-approve rate (15)",      pct(data["chroma"], SS,  "critic_false_approve"),         pct(data["graphiti"], SS,  "critic_false_approve")],
+        ["Historical-belief accuracy (5)",      pct(data["chroma"], HB,  "correct"),                      pct(data["graphiti"], HB,  "correct")],
     ]
 
-    col_w = [38, 18, 18]
+    col_w = [34, 20, 20]
     sep = "+" + "+".join("-" * w for w in col_w) + "+"
     def row_str(cells):
         return "|" + "|".join(f" {c:<{col_w[i]-2}} " for i, c in enumerate(cells)) + "|"
@@ -220,6 +241,7 @@ def print_report():
     for r in rows:
         print(row_str(r))
     print(sep)
+    print("\nNote: Graphiti condition requires Neo4j. Run: python -m eval.run_eval --backend graphiti")
 
 
 # ── entry point ──────────────────────────────────────────────────────────────
