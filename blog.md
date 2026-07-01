@@ -2,9 +2,9 @@
 
 *As multi-agent loop engineering matures, memory architecture becomes the critical failure point for most teams.*
 
-Imagine a user's favourite movie changes. Interstellar gets dethroned by Inception. Both facts, the old favourite and the new, sit in the vector store. An agent queries for the current favourite. Similarity retrieval returns Interstellar, the outdated one. The critic agent flags it and triggers a retry. Same result. Retries again. Then escalates to a human, no answer produced.
+Imagine a user's favourite movie changes. Interstellar gets dethroned by Batman Begins, for example. Both facts, the old favourite and the new, sit in the vector store. An agent queries for the current favourite and similarity retrieval returns Interstellar, the outdated one. The critic agent flags it and triggers a retry but gets back the same result. Retries again, then escalates to a human without any answer produced.
 
-That failure is the staleness problem in flat vector RAG. Embed documents, store in a vector store, retrieve by cosine similarity and it works for single-shot retrieval. Inside a loop, when two versions of the same fact coexist in memory, it breaks. The retriever has no concept of time and returns whatever scores highest on similarity, which is often the outdated fact.
+That failure is the staleness problem in flat vector RAG. Embed documents, store in a vector store, retrieve by cosine similarity. This works for single-shot retrieval. Inside a loop, when two versions of the same fact coexist in memory, it breaks. The retriever has no concept of time and returns whatever scores highest on similarity, which is often the outdated fact.
 
 An empirical A/B test of two memory architectures running the same 4-agent loop: ChromaDB (flat vector RAG, baseline) and Graphiti + Neo4j (temporal knowledge graph, treatment). Both back the same loop, with the same agents. Only the injected memory object differs.
 
