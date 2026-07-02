@@ -2,7 +2,7 @@
 
 Empirical A/B test comparing two memory backends in a 4-agent research loop: **ChromaDB** (flat vector RAG) vs **Graphiti + Neo4j** (temporal knowledge graph). Both backends run the same loop with identical agents. Only the injected memory object differs.
 
-**Core finding:** temporal graph memory reduces staleness error from 87% to 20% - but introduces a 100% failure rate on historical belief queries. Full write-up in [`blog.md`](blog.md).
+**Core finding:** temporal graph memory reduces staleness error from 87% to 20%. With point-in-time retrieval enabled via `reference_time`, historical belief accuracy rises from 0% to 40% - remaining failures are 8B synthesis noise, not retrieval failures. Full write-up in [`blog.md`](blog.md).
 
 ---
 
@@ -10,11 +10,11 @@ Empirical A/B test comparing two memory backends in a 4-agent research loop: **C
 
 | Metric | ChromaDB | Graphiti |
 |---|---|---|
-| Overall accuracy (30) | 50% | 70% |
+| Overall accuracy (30) | 50% | 77% |
 | Staleness accuracy (15) | 13% | 80% |
 | Staleness error rate (15) | 87% | 20% |
 | Staleness-caused failures (15) | 87% | 0% |
-| Historical-belief accuracy (5) | 60% | 0% |
+| Historical-belief accuracy (5) | 60% | 40% |
 
 ---
 
