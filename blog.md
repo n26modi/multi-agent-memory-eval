@@ -122,7 +122,9 @@ Graphiti erases V1 when V2 is written. The researcher retrieves V2, the critic a
 
 Chroma retrieves either V1 or V2 with roughly equal probability (both have similar similarity scores). 3 of 5 correct, essentially random.
 
-A one-sided Graphiti win across all 30 queries would suggest the dataset was too easy. The historical-belief failure reveals a real tradeoff: temporal invalidation that works for "what is current?" actively works against "what was true before?" The right memory architecture depends on the question distribution the system needs to answer.
+This is a loop design failure, not a Graphiti limitation. Graphiti's `search()` accepts a `reference_time` parameter for point-in-time queries: pass a datetime and it returns facts where `valid_at <= T` and `invalid_at IS NULL OR invalid_at > T`, which would surface V1 for a historical query. The loop never passes that context. To use it, the planner or researcher would need to parse a temporal constraint from the natural language query and convert it to a datetime before calling memory. That's a non-trivial addition to the loop design, but the mechanism exists.
+
+A one-sided Graphiti win across all 30 queries would suggest the dataset was too easy. The historical-belief failure reveals a real tradeoff: temporal invalidation that works for "what is current?" actively works against "what was true before?" when the loop doesn't pass temporal context. The right fix is a loop that extracts and forwards that context, not a different memory backend.
 
 ---
 
@@ -164,7 +166,7 @@ Temporal graph memory earns its complexity when:
 
 The third point is the one that gets missed. Temporal memory is often framed as a "knowledge base" improvement. It's actually a **loop engineering** improvement. Without it, a well-designed critic that correctly detects staleness makes the system *worse*. It burns retries on a problem the retriever can never solve.
 
-Historical belief queries require a third option: a memory architecture that can query across time windows rather than always returning the live fact. Neither backend tested here handles this well. Graphiti overwrites. ChromaDB guesses randomly. The right answer is a retriever that can accept a temporal constraint as part of the query.
+Historical belief queries require the loop to forward temporal context to the retriever. Graphiti supports this via `reference_time` in search. ChromaDB has no equivalent. The gap isn't the memory backend - it's whether the loop extracts a temporal constraint from the query and passes it through.
 
 ---
 
