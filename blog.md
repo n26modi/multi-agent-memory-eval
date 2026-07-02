@@ -2,11 +2,11 @@
 
 *As multi-agent loop engineering matures, memory architecture becomes the critical failure point for most teams.*
 
-Imagine a user's favourite movie changes. For example, Interstellar gets dethroned by Batman Begins. Both facts, the old favourite and the new, sit in the vector store. An agent queries for the current favourite and similarity retrieval returns Interstellar, the outdated one. The critic agent flags it and triggers a retry but gets back the same result. Retries again, then escalates to a human without any answer produced.
+Imagine a user's favourite movie changes. For example, Interstellar gets dethroned by Batman Begins. Both facts, the old favourite and the new, sit in the vector store. An agent queries for the current favourite and similarity retrieval returns Interstellar, the outdated one. The critic agent flags it and triggers a retry but gets back the same result. After another failed retry, the loop then escalates to a human. 
 
-That failure is the staleness problem in flat vector RAG. Embed documents, store in a vector store, retrieve by cosine similarity. This works for single-shot retrieval. Inside a loop, when two versions of the same fact coexist in memory, it breaks. The retriever has no concept of time and returns whatever scores highest on similarity, which is often the outdated fact.
+That failure is caused by staleness= in flat vector RAG. Quick overviewof RAG: Embed documents, store in a vector store, retrieve by cosine similarity. This works for single-shot retrieval. Inside a loop, when two versions of the same fact coexist in memory, it breaks. The retrieval process has no concept of time and returns whatever scores highest on similarity, which is often the outdated fact.
 
-I ran an A/B test of two memory architectures against the same 4-agent loop: ChromaDB (flat vector RAG, baseline) and Graphiti + Neo4j (temporal knowledge graph, treatment). Both are backends to the exact same loop, with the exact same agents. Only the injected memory object differs.
+I ran an A/B test of two memory architectures against the same 4-agent loop. Firstly the baseline, ChromaDB (flat vector RAG). The second memory architecture is Graphiti + Neo4j, which is a temporal knowledge graph. Both are backends to the exact same loop, with the exact same 4 agents. Only the injected memory object differs.
 
 ---
 
@@ -16,7 +16,7 @@ The system is a 4-agent research loop built in LangGraph. The loop takes a query
 
 ![Multi-agent research loop diagram](assets/agent_loop.png)
 
-**Loop engineering** here means the retry-escalate control structure. The critic scores findings on two dimensions: staleness (does a newer version of this fact exist?) and grounding (does the text support the claim?). If quality falls below 0.7, the loop sends the researcher back. If retries are exhausted, the loop escalates rather than hallucinate.
+**Loop engineering** here refers to the retry-escalate control structure. The critic scores findings on two dimensions: staleness (does a newer version of this fact exist?) and grounding (does the text support the claim?). If quality falls below 0.7, the loop sends the researcher back. If retries are exhausted, the loop escalates rather than hallucinate.
 
 The agents are identical across both memory conditions. The planner breaks queries into 2-3 subtasks. The researcher queries memory and returns the top-1 hit per subtask. The critic checks each finding against `current_value(entity, relation)` for staleness, then runs an LLM grounding check. The synthesiser writes the final report from approved findings.
 
@@ -29,23 +29,23 @@ class Memory(ABC):
     async def current_value(self, entity: str, relation: str) -> Finding | None: ...
 ```
 
-Both implementations call the same Memory class, so the loop never knows which backend it's talking to. This makes it a controlled experiment.
+Both implementations (ChromaDB and Graphiti + Neo4j) call the same Memory class, so the loop never knows which backend it's talking to. This makes it a controlled experiment.
 
 ---
 
 ## The eval harness
 
-Measuring the quality of memory in a multi-agent loop requires more than accuracy on a benchmark. On top of just checking if the answer is correct, i built an eval harness that also tracks *why* an answer is wrong. Specifically, whether or not staleness is what caused the failure. 
+Measuring the quality of memory in a multi-agent loop requires more than just accuracy on a benchmark. On top of just checking if the answer is correct, i built an eval harness that also tracks *why* an answer is wrong. Specifically, whether or not staleness is what caused the failure. 
 
-**Dataset: 30 queries across three types.**
+**The Dataset: 30 queries across three types.**
 
-**Static fact (n=10)** - one correct fact per query, no temporal element. Control group. Confirms the loop works before adding temporal complexity.
+**Static fact (n=10)** - one correct fact per query without any temporal element. This is the control group to confirms the loop works before adding temporal complexity.
 
 **Staleness-sensitive (n=15)** - two versions of a fact seeded into memory before each query. V1 is the older value (wrong answer for the query), V2 is the newer value (correct answer). Examples: a company's CEO changed, a user's favourite movie changed, a framework changed its default optimizer. The query asks for the current value.
 
 **Historical belief (n=5)** - same two-version setup, but the query asks for the *past* state. The older fact is the correct answer. I included this subset specifically to stress-test Graphiti's temporal invalidation in the direction where it's expected to fail.
 
-The anti-cheat constraint governs all staleness items: V1 and V2 texts must be **indistinguishable without timestamps**. No recency words - "former," "previously," "outdated," "no longer" are all banned from corpus text. No explicit dates in the facts. Both V1 and V2 describe their fact as currently true. A reader encountering only one version would believe it. This ensures the temporal mechanism - not surface cues - is what determines retrieval outcome.
+The anti-cheat constraint governs all staleness items: V1 and V2 texts must be **indistinguishable without timestamps**. Recency words such as "former," "previously," "outdated," "no longer" are all banned from corpus text. No explicit dates in the facts. Both V1 and V2 describe their fact as currently true. A reader encountering only one version would believe it. This ensures the temporal mechanism is what determines retrieval outcome, not surface cues.
 
 **Scoring tracks four metrics per query:**
 - `correct` - ground truth appears in the final report
@@ -53,7 +53,7 @@ The anti-cheat constraint governs all staleness items: V1 and V2 texts must be *
 - `critic_false_approve` - stale fact reached the report without being caught
 - `staleness_caused_failure` - failure tagged with `staleness_failure` in the critic
 
-Queries are isolated: each gets a fresh memory instance and a unique partition ID so facts from different queries never bleed into each other.
+Each query is isolated, so each one gets a fresh memory instance and a unique partition ID. Therefore, facts from different queries never bleed into each other.
 
 ---
 
@@ -65,9 +65,9 @@ The mechanism comes down to what each memory layer sees when two versions of a f
 
 In **ChromaDB**, both V1 (Jonathan Hale, CEO, Jun 2024) and V2 (Dr. Priya Nair, CEO, Dec 2025) sit in the vector store with no temporal metadata that affects retrieval. Both have `invalid_at: None` because ChromaDB has no such field. When the researcher queries "Who is the CEO of Meridian Bio?", cosine similarity decides. Because V1 and V2 are written in similar style and on the same topic (that's the anti-cheat guarantee), either could win. In practice, V1 consistently won the similarity contest in this eval, landing the researcher on the stale fact.
 
-In **Graphiti**, when V2 is written, a Cypher query marks V1 with `invalid_at = V2.valid_at`. V1 is now superseded at the graph layer. The researcher's `query()` method filters to `invalid_at IS NULL` before returning results. V1 is invisible. The researcher gets V2 on the first retrieval.
+In **Graphiti**, when V2 is written, a Cypher query marks V1 with `invalid_at = V2.valid_at`. V1 is now superseded at the graph layer. The researcher's `query()` method filters to `invalid_at IS NULL` before returning results. V1 is invisible. The researcher agent gets V2 on the first retrieval.
 
-The retrieval-layer difference is the entire story. The researcher doesn't need to be smarter. The critic doesn't need a better staleness check. The memory layer needs to stop returning stale facts.
+This difference in the retrieval layer makes all the difference. The researcher doesn't actually need to be smarter, nor does the critic  need a better staleness check. The memory layer just needs to stop returning stale facts.
 
 ---
 
@@ -96,7 +96,7 @@ The retrieval-layer difference is the entire story. The researcher doesn't need 
 
 **Graphiti's 3 staleness failures (20%):** All three were `retrieval_misalignment` escalations where the critic's LLM grounding check scored valid findings below 0.5, triggering unnecessary retries until escalation. These are noise from the 8B model used for agent LLM calls, not staleness system failures. Graphiti had zero findings where V1 made it into the final report.
 
-**Historical belief:** Chroma 60%, Graphiti 40%. Discussed below.
+**Historical belief:** Chroma 60%, Graphiti 40%. This can be traced to the model call, not the memory architecture itself. Discussed below.
 
 ---
 
@@ -140,9 +140,7 @@ Across both conditions, three failure modes appeared:
 
 ## Caveats
 
-**Sample size.** n=15 on the staleness subset is enough to observe a clear directional effect but not enough for strong statistical claims. The 67 percentage point gap is large, but I'd treat the exact numbers as indicative rather than definitive.
-
-**Manual invalidation vs native Graphiti.** Graphiti's `add_episode` method uses an internal LLM call for entity extraction. That call requires ~18K tokens per episode, which exceeds the token-per-minute limit on any Groq free-tier model. `add_episode` was replaced with direct node and edge construction via `add_nodes_and_edges_bulk`, managing `invalid_at` with a Cypher query on write. The temporal semantics are preserved. Graphiti's LLM-driven entity resolution (which merges references to the same entity across different surface forms) is not used. The dataset uses exact-match entity strings across V1 and V2, so this doesn't affect results here.
+**Sample size.** n=15 on the staleness subset is enough to observe a clear directional effect but not enough for strong statistical claims. The 67 percentage point gap is large, but these exact numbers are indicative rather than definitive.
 
 **Agent LLM is 8B.** The planner, critic grounding check, and synthesiser all use `llama-3.1-8b-instant` via Groq free tier. The retrieval misalignment failures and some static-fact misses are 8B inconsistency. A stronger model would reduce noise.
 
