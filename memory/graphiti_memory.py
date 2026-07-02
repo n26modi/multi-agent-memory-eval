@@ -89,12 +89,17 @@ class GraphitiMemory(Memory):
             invalid_at=invalid_at,
         )
 
-    async def query(self, query_text: str, k: int = 5) -> list[Finding]:
-        # Fetch more than k so we have enough after filtering out invalidated edges.
-        # Invalidated edges (invalid_at IS NOT NULL) represent superseded facts;
-        # excluding them is what makes Graphiti better than a flat vector store.
+    async def query(self, query_text: str, k: int = 5, reference_time: float | None = None) -> list[Finding]:
         edges = await self.g.search(query_text, num_results=k * 3, group_ids=[self.group_id])
-        live = [e for e in edges if e.invalid_at is None]
+        if reference_time is not None:
+            ref_dt = datetime.fromtimestamp(reference_time, tz=timezone.utc)
+            live = [
+                e for e in edges
+                if (e.valid_at or e.created_at) <= ref_dt
+                and (e.invalid_at is None or e.invalid_at > ref_dt)
+            ]
+        else:
+            live = [e for e in edges if e.invalid_at is None]
         return [self._edge_to_finding(e) for e in live[:k]]
 
     async def current_value(self, entity: str, relation: str) -> Finding | None:

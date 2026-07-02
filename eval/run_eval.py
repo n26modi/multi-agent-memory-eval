@@ -176,6 +176,7 @@ async def run_condition(backend: str, queries: list[dict], cap: int | None = Non
             "last_quality": 0.0,
             "failure_tags": [],
             "final_report": "",
+            "temporal_context": q["v1_valid_at"] if q["type"] == "historical_belief" else None,
         }
 
         t0 = time.time()

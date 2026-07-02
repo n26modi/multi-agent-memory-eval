@@ -8,8 +8,9 @@ from state import ResearchState
 async def researcher_agent(state: ResearchState, memory: Memory) -> ResearchState:
     findings: list[Finding] = []
 
+    ref_time = state.get("temporal_context")
     for subtask in state["subtasks"]:
-        hits = await memory.query(subtask, k=3)
+        hits = await memory.query(subtask, k=3, reference_time=ref_time)
         if hits:
             # top-1 hit only — one finding per subtask keeps quality metric
             # meaningful and makes the Chroma vs Graphiti comparison clean

@@ -23,7 +23,7 @@ class ChromaMemory(Memory):
             }],
         )
 
-    async def query(self, query_text: str, k: int = 5) -> list[Finding]:
+    async def query(self, query_text: str, k: int = 5, reference_time: float | None = None) -> list[Finding]:
         res = self.col.query(query_texts=[query_text], n_results=k)
         return [
             self._to_finding(m, d)

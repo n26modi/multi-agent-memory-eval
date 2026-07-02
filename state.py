@@ -12,3 +12,4 @@ class ResearchState(TypedDict):
     last_quality: float
     failure_tags: list[str]
     final_report: str
+    temporal_context: float | None  # unix timestamp; researcher passes this to memory.query() for point-in-time retrieval

@@ -8,12 +8,20 @@ async def critic_agent(state: ResearchState, memory: Memory) -> ResearchState:
     client = groq_client()
     approved, failure_tags = [], list(state["failure_tags"])
 
+    ref_time = state.get("temporal_context")
     for f in state["findings"]:
-        # staleness check — this is where the two backends diverge
-        current = await memory.current_value(f.entity, f.relation)
-        if current and current.valid_at > f.valid_at and current.value != f.value:
-            failure_tags.append("staleness_failure")
-            continue
+        if ref_time is not None:
+            # historical query: check the finding was valid at the reference time,
+            # not whether a newer version exists now
+            if f.valid_at > ref_time:
+                failure_tags.append("staleness_failure")
+                continue
+        else:
+            # staleness check — this is where the two backends diverge
+            current = await memory.current_value(f.entity, f.relation)
+            if current and current.valid_at > f.valid_at and current.value != f.value:
+                failure_tags.append("staleness_failure")
+                continue
 
         # grounding check via LLM
         response = await client.chat.completions.create(
