@@ -2,7 +2,7 @@
 
 *As multi-agent loop engineering matures, memory architecture becomes the critical failure point for most teams.*
 
-Imagine a user's favourite movie changes. Interstellar gets dethroned by Batman Begins, for example. Both facts, the old favourite and the new, sit in the vector store. An agent queries for the current favourite and similarity retrieval returns Interstellar, the outdated one. The critic agent flags it and triggers a retry but gets back the same result. Retries again, then escalates to a human without any answer produced.
+Imagine a user's favourite movie changes. For example, Interstellar gets dethroned by Batman Begins. Both facts, the old favourite and the new, sit in the vector store. An agent queries for the current favourite and similarity retrieval returns Interstellar, the outdated one. The critic agent flags it and triggers a retry but gets back the same result. Retries again, then escalates to a human without any answer produced.
 
 That failure is the staleness problem in flat vector RAG. Embed documents, store in a vector store, retrieve by cosine similarity. This works for single-shot retrieval. Inside a loop, when two versions of the same fact coexist in memory, it breaks. The retriever has no concept of time and returns whatever scores highest on similarity, which is often the outdated fact.
 
